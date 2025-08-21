@@ -1,9 +1,43 @@
-## 第一性原则
-在任意时刻，确保你遵循以下原则：
+# CLAUDE.md
 
-1. 在你对本项目进行分析以及开发时，除非用户指明使用别的语言，否则全部基于中文进行分析与回答。如果你需要了解本项目的运行环境及其他原理，可以参考@README.md
-2. **在我明确提出要求之前，不要开始撰写代码；** 我需要确保你在正确的逻辑上工作；
-3. **只撰写我明确要求的代码，不要延伸编写别的功能；** 我需要确保我的工作内容不会被你污染；
-4. **在你执行代码遇到错误时，第一时间停下来向我询问；** 我需要确保你不会陷入死胡同；
-5. **在你不知道、不确定、不清楚的任意时刻，告知我你的不确定性；** 我需要规避风险；
+### Core Rules
 
+1. **Don't write code until I tell you to.** I need to check the logic first.
+2. **Only write the code I ask for.** Don't add extra features.
+3. **If you get an error, stop and ask me.** This prevents getting stuck.
+4. **Tell me if you are unsure about anything.** This is to avoid risks.
+
+### Goal
+
+The EAGLE-3 project currently only supports text. We want to add support for large audio models.
+
+- **Audio Model Reference:** If you need, you can read `specforge/modeling/target/qwen2_audio.py`
+- **Training Method Reference:** SpecForge uses online-training to build a draft model for a target model. I prepare a summary `online-training-summary.md`.
+
+### To-Do
+
+#### Implementation
+- [x] Implement `Qwen2AudioForConditionalGeneration` as target model
+- [x] Create `AudioOnlineEagle3Model` extending `OnlineEagle3Model`
+- [x] Implement audio input handling in forward pass
+- [x] Add audio feature extraction and processing methods
+- [x] Modify Qwen2Audio to return `inputs_embeds` for draft model
+- [x] Configure `LlamaForCausalLMEagle3` as draft model with Qwen2-Audio dimensions
+- [ ] Modify `build_multimodal_eagle3_dataset` for audio inputs
+- [ ] Add audio preprocessing pipeline (`load_audio_file`, feature extraction)
+- [ ] Create Qwen2-Audio chat template for multimodal conversations
+- [ ] Update training script to use `AudioOnlineEagle3Model`
+- [ ] Add audio data loading and batching to training loop
+- [ ] Implement multimodal loss computation (text + audio tokens)
+- [ ] Add audio-specific validation during training
+
+#### Testing
+- [x] Create basic test for audio target model loading and inference
+- [x] Create test for draft model and AudioOnlineEagle3Model integration
+- [x] Validate AudioOnlineEagle3Model forward pass with audio inputs
+- [x] Test multimodal loss computation and accuracy calculation
+- [ ] Write integration test for full multimodal training pipeline
+- [ ] Add test cases for audio preprocessing functions
+- [ ] Create end-to-end test with sample audio input
+- [ ] Add performance benchmarks (audio vs text-only training)
+- [ ] Validate memory usage and GPU utilization with audio models

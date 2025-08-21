@@ -139,7 +139,6 @@ class AudioOnlineEagle3Model(OnlineEagle3Model):
         batch_size, seq_length, _ = hidden_states.shape
         seq_length_with_past = seq_length
         past_key_values_length = 0
-        
         # Project hidden states
         hidden_states = self.draft_model.project_hidden_states(hidden_states)
         
@@ -219,7 +218,7 @@ class AudioOnlineEagle3Model(OnlineEagle3Model):
             out_logp = nn.LogSoftmax(dim=2)(logits)
             plogp = target_p * out_logp
             loss = -torch.sum(position_mask * plogp, 2).mean()
-            
+
             # Record metrics
             plosses.append(loss)
             with torch.no_grad():
