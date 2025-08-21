@@ -58,6 +58,8 @@ class Qwen2AudioCausalLMOutputWithPast(ModelOutput):
         all `input_ids` of shape `(batch_size, sequence_length)`.
     attention_mask (`torch.FloatTensor`, *optional*):
         Attentions mask, used to update attention mask and position_ids.
+    inputs_embeds (`torch.FloatTensor`, *optional*):
+        The merged embeddings containing text embeddings and projected audio features.
     """
 
     loss: Optional[torch.FloatTensor] = None
@@ -66,6 +68,7 @@ class Qwen2AudioCausalLMOutputWithPast(ModelOutput):
     hidden_states: Optional[tuple[torch.FloatTensor]] = None
     attentions: Optional[tuple[torch.FloatTensor]] = None
     attention_mask: Optional[torch.FloatTensor] = None
+    inputs_embeds: Optional[torch.FloatTensor] = None
 
 
 # Copied from transformers.models.whisper.modeling_whisper.eager_attention_forward
@@ -877,6 +880,7 @@ class Qwen2AudioForConditionalGeneration(Qwen2AudioPreTrainedModel, GenerationMi
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
             attention_mask=attention_mask,
+            inputs_embeds=inputs_embeds,  # Return the merged embeddings
         )
 
     def prepare_inputs_for_generation(self, *args, **kwargs):

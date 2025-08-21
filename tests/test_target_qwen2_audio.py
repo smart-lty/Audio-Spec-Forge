@@ -37,7 +37,6 @@ class TestAutoModelForCausalLM(unittest.TestCase):
                         )
         inputs = processor(text=text, audios=audios, return_tensors="pt", padding=True)
         inputs.input_ids = inputs.input_ids.to("cuda")
-
         generate_ids = model.generate(**inputs, max_length=1024)
         generate_ids = generate_ids[:, inputs.input_ids.size(1):]
 
