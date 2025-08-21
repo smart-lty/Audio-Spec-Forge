@@ -19,8 +19,7 @@ MultimodalConversation = List[Dict[str, Union[str, List[Dict[str, str]]]]]
 
 def load_audio_file(
     audio_path: str,
-    target_sample_rate: int = 16000,
-    max_duration: Optional[float] = None
+    target_sample_rate: int = 16000
 ) -> Tuple[torch.Tensor, int]:
     """
     Load audio file and resample to target sample rate.
@@ -28,18 +27,14 @@ def load_audio_file(
     Args:
         audio_path: Path to audio file
         target_sample_rate: Target sampling rate for audio
-        max_duration: Maximum duration in seconds (None for no limit)
         
     Returns:
         Tuple of (audio_tensor, sample_rate)
     """
     try:
-        # Load with duration limit if specified
-        duration = max_duration if max_duration is not None else None
         audio, sr = librosa.load(
             audio_path, 
             sr=target_sample_rate, 
-            duration=duration,
             mono=True,
             dtype=np.float32
         )
@@ -66,7 +61,6 @@ def preprocess_multimodal_conversations(
     wav_paths: List[str],
     ground_truths: List[str],
     max_length: int = 2048,
-    max_audio_duration: Optional[float] = None,
 ) -> Dict[str, List[torch.Tensor]]:
     """
     Preprocess a batch of multimodal conversations with audio for Eagle3 Step 2 training.
@@ -80,7 +74,6 @@ def preprocess_multimodal_conversations(
         wav_paths: List of paths to audio files.
         ground_truths: List of ground truth transcriptions (not used in Step 2 training).
         max_length: The maximum length of the tokenized input.
-        max_audio_duration: Maximum audio duration in seconds.
 
     Returns:
         A dictionary containing:
@@ -134,27 +127,19 @@ def preprocess_multimodal_conversations(
                 tokenize=False
             )
             
-            # Load audio
-            audio, sample_rate = load_audio_file(
+            # Load audio using librosa directly (matching the working test)
+            audio_array, _ = librosa.load(
                 wav_path, 
-                target_sample_rate=processor.feature_extractor.sampling_rate,
-                max_duration=max_audio_duration
+                sr=processor.feature_extractor.sampling_rate,
+                mono=True,
+                dtype=np.float32
             )
-            
-            # Process with Qwen2Audio processor
-            # Convert audio tensor to numpy for processor
-            if isinstance(audio, torch.Tensor):
-                audio_array = audio.numpy()
-            else:
-                audio_array = audio
                 
             inputs = processor(
                 text=text, 
                 audios=[audio_array], 
                 return_tensors="pt", 
                 padding=True,
-                max_length=max_length,
-                truncation=True,
                 sampling_rate=processor.feature_extractor.sampling_rate,  # Fix sampling rate warning
             )
             
@@ -163,6 +148,11 @@ def preprocess_multimodal_conversations(
             attention_mask = inputs.attention_mask.squeeze(0)
             input_features = inputs.input_features.squeeze(0)
             feature_attention_mask = inputs.feature_attention_mask.squeeze(0)
+            
+            # Truncate text tokens if needed (but keep audio features at full length)
+            if input_ids.size(0) > max_length:
+                input_ids = input_ids[:max_length]
+                attention_mask = attention_mask[:max_length]
             
             # Create loss mask - simplified for Step 2 (will be handled by Eagle3 training)
             loss_mask = torch.ones(len(input_ids), dtype=torch.long)  # Simple: all tokens for loss
@@ -204,7 +194,6 @@ class AudioDataset(Dataset):
         data_path: str,
         processor, 
         max_length: int = 2048,
-        max_audio_duration: Optional[float] = None,
         transform=None,
     ):
         """
@@ -214,13 +203,11 @@ class AudioDataset(Dataset):
             data_path: Path to JSONL file containing audio data
             processor: AutoProcessor for Qwen2Audio
             max_length: Maximum sequence length
-            max_audio_duration: Maximum audio duration in seconds
             transform: Optional transform to apply to data
         """
         self.data_path = data_path
         self.processor = processor
         self.max_length = max_length
-        self.max_audio_duration = max_audio_duration
         self.transform = transform
         
         # Load data
@@ -264,7 +251,6 @@ class AudioDataset(Dataset):
                 wav_paths=[item['wav_path']],
                 ground_truths=[item['Ground_Truth']],
                 max_length=self.max_length,
-                max_audio_duration=self.max_audio_duration,
             )
             
             # Extract first (and only) item from each list
@@ -305,7 +291,6 @@ def build_multimodal_eagle3_dataset(
     data_path: str,
     processor, 
     max_length: Optional[int] = 2048,
-    max_audio_duration: Optional[float] = None,
     transform=None,
 ) -> AudioDataset:
     """
@@ -319,7 +304,6 @@ def build_multimodal_eagle3_dataset(
         data_path: Path to JSONL file containing audio data with pre-generated responses
         processor: AutoProcessor for Qwen2Audio (handles both text and audio)
         max_length: Maximum length of tokenized input
-        max_audio_duration: Maximum audio duration in seconds
         transform: Optional transform to apply to data
         
     Returns:
@@ -329,7 +313,6 @@ def build_multimodal_eagle3_dataset(
         data_path=data_path,
         processor=processor,
         max_length=max_length,
-        max_audio_duration=max_audio_duration,
         transform=transform,
     )
 

@@ -198,9 +198,7 @@ def main():
             dataset = build_multimodal_eagle3_dataset(
                 data_path=data_path,
                 processor=processor,
-                chat_template=chat_template,
                 max_length=max_length,
-                max_audio_duration=max_audio_duration,
             )
             
             dataset_time = time.time() - dataset_start
