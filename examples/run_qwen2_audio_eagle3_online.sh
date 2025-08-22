@@ -12,8 +12,8 @@ torchrun \
     --draft-model-config configs/qwen2-audio-eagle3.json \
     --train-data-path cache/dataset/gigaspeech_demo_regenerate.jsonl \
     --output-dir outputs/qwen2-audio-7b-eagle3 \
-    --num-epochs 5 \
-    --batch-size 1 \
+    --num-epochs 10 \
+    --batch-size 5 \
     --learning-rate 1e-4 \
     --max-length 2048 \
     --ttt-length 7 \
