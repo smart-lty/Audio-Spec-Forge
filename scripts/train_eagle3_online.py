@@ -80,6 +80,7 @@ def parse_args():
         default=20,
         help="Timeout for collective communication in minutes",
     )
+    parser.add_argument("--attention-backend", type=str, default="flex_attention")
 
     # resume
     parser.add_argument("--resume", action="store_true")
@@ -89,6 +90,8 @@ def parse_args():
     parser.add_argument("--wandb-project", type=str, default=None)
     parser.add_argument("--wandb-name", type=str, default=None)
     parser.add_argument("--wandb-key", type=str, default=None)
+
+    parser.add_argument("--build-dataset-num-proc", type=int, default=8)
 
     args = parser.parse_args()
 
@@ -115,7 +118,7 @@ def main():
     parser, args = parse_args()
     set_seed(args.seed)
     init_distributed(timeout=args.dist_timeout, tp_size=args.tp_size)
-    print_with_rank(f"Initialized distributed environment")
+    print_with_rank("Initialized distributed environment")
 
     # Validate wandb arguments
     validate_wandb_args(parser, args)
@@ -149,24 +152,28 @@ def main():
             .eval()
             .cuda()
         )
-    print_with_rank(f"Initialized target model")
+    print_with_rank("Initialized target model")
     # load model with resume
     draft_model_config = AutoDraftModelConfig.from_file(args.draft_model_config)
     if draft_model_last_checkpoint:
         draft_model = (
-            AutoEagle3DraftModel.from_pretrained(draft_model_last_checkpoint)
+            AutoEagle3DraftModel.from_pretrained(
+                draft_model_last_checkpoint, attention_backend=args.attention_backend
+            )
             .cuda()
             .to(torch.bfloat16)
         )
     else:
         draft_model = (
-            AutoEagle3DraftModel.from_config(draft_model_config)
+            AutoEagle3DraftModel.from_config(
+                draft_model_config, attention_backend=args.attention_backend
+            )
             .cuda()
             .to(torch.bfloat16)
         )
     draft_model.load_embedding(args.target_model_path, embedding_key=args.embedding_key)
     draft_model.freeze_embedding()
-    print_with_rank(f"Initialized draft model")
+    print_with_rank("Initialized draft model")
 
     # build dataloaders
     tokenizer = AutoTokenizer.from_pretrained(args.target_model_path)
@@ -188,6 +195,7 @@ def main():
             max_length=args.max_length,
             cache_dir=os.path.join(args.cache_dir, "processed_dataset"),
             cache_key=cache_key,
+            num_proc=args.build_dataset_num_proc,
         )
         vocab_mapping_path = generate_vocab_mapping_file(
             dataset=train_eagle3_dataset,
@@ -203,11 +211,11 @@ def main():
         shuffle=True,
         process_group=get_dp_group(),
     )
-    print_with_rank(f"Initialized train dataloader")
+    print_with_rank("Initialized train dataloader")
 
     # we load the vocab mapping then
     draft_model.load_vocab_mapping(vocab_mapping_path)
-    print_with_rank(f"Loaded vocab mapping")
+    print_with_rank("Loaded vocab mapping")
 
     if args.eval_data_path is not None:
         eval_dataset = load_dataset("json", data_files=args.eval_data_path)["train"]
@@ -216,6 +224,7 @@ def main():
             tokenizer,
             args.chat_template,
             args.max_length,
+            num_proc=args.build_dataset_num_proc,
         )
         eval_dataloader = prepare_dp_dataloaders(
             eval_eagle3_dataset,
@@ -224,7 +233,7 @@ def main():
             shuffle=False,
             process_group=get_dp_group(),
         )
-        print_with_rank(f"Initialized eval dataloader")
+        print_with_rank("Initialized eval dataloader")
 
     # build Eagle3 model
     # broadcast draft model
@@ -232,6 +241,7 @@ def main():
         target_model=target_model,
         draft_model=draft_model,
         length=args.ttt_length,
+        attention_backend=args.attention_backend,
     )
     # eagle3_model = DDP(eagle3_model, find_unused_parameters=True)
     eagle3_model = FSDP(
@@ -245,7 +255,7 @@ def main():
         ignored_modules=[target_model],
         process_group=get_dp_group(),
     )
-    print_with_rank(f"Initialized Eagle3 FSDP model")
+    print_with_rank("Initialized Eagle3 FSDP model")
 
     # build other components
     optimizer = torch.optim.AdamW(eagle3_model.parameters(), lr=args.learning_rate)
@@ -254,7 +264,7 @@ def main():
     scheduler = CosineAnnealingWarmupLR(
         optimizer, total_steps=total_steps, warmup_steps=warmup_steps
     )
-    print_with_rank(f"Initialized optimizer and scheduler")
+    print_with_rank("Initialized optimizer and scheduler")
 
     # resume
     start_epoch = 0

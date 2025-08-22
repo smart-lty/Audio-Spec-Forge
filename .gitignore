@@ -196,3 +196,7 @@ outputs/
 wandb/
 .idea
 audio_dev_docs/
+# macOS
+.DS_Store
+
+.vscode/
